@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net40</TargetFramework>
+    <Description>Jenkins Custom Actions for Wix Toolset</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="JenkinsCA.config" CopyToOutputDirectory="PreserveNewest" />
+    <CustomActionContents Include="CustomActions.cs;DirectoryObjectPickerDialog.cs;ImpersonatedSession.cs;Utilities.cs;Windows.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Dtf.CustomAction" Version="5.0.*"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Security" />
+  </ItemGroup>
+</Project>

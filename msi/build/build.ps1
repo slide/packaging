@@ -33,11 +33,6 @@ if(!(Test-Path $tmpDir)) {
     Get-ChildItem tmp\* | Remove-Item -Force
 }
 
-if(!(Test-Path (Join-Path $PSScriptRoot 'msiext-1.5/WixExtensions/WixCommonUiExtension.dll'))) {
-    Invoke-WebRequest -Uri "https://github.com/dblock/msiext/releases/download/1.5/msiext-1.5.zip" -OutFile (Join-Path $PSScriptRoot 'msiext-1.5.zip') -UseBasicParsing
-    [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $PSScriptRoot 'msiext-1.5.zip'), $PSScriptRoot)
-}
-
 Write-Host "Extracting components"
 if($UseTracing) { Set-PSDebug -Trace 0 }
 # get the components we need from the war file
@@ -63,21 +58,24 @@ if($UseTracing) { Set-PSDebug -Trace 1 }
 
 $isLts = $JenkinsVersion.Split('.').Length -gt 2
 
-Write-Host "Restoring packages before build"
-# restore the Wix package
-& "./nuget.exe" restore -PackagesDirectory "packages"
-
 Write-Host "Building MSI"
 if($MSBuildPath -ne '') {
     if($MSBuildPath.ToLower().EndsWith('msbuild.exe')) {
         $MSBuildPath = [System.IO.Path]::GetDirectoryName($MSBuildPath)
     }
     $env:PATH = $env:PATH + ";" + $MSBuildPath
+} else {
+    # try to find it with vswhere
+    $MSBuildPath = & 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe' -products * -latest -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe
+    if(($MSBuildPath -ne '') -and $MSBuildPath.ToLower().EndsWith('msbuild.exe')) {
+        $MSBuildPath = [System.IO.Path]::GetDirectoryName($MSBuildPath)
+    }
+    $env:PATH = $env:PATH + ";" + $MSBuildPath
 }
 
-msbuild "jenkins.wixproj" /p:Stable="${isLts}" /p:WAR="${War}" /p:Configuration=Release /p:DisplayVersion=$JenkinsVersion /p:ProductName="${ProductName}" /p:ProductSummary="${ProductSummary}" /p:ProductVendor="${ProductVendor}" /p:ArtifactName="${ArtifactName}" /p:BannerBmp="${BannerBmp}" /p:DialogBmp="${DialogBmp}" /p:InstallerIco="${InstallerIco}"
+msbuild "jenkins.sln" /p:Stable="${isLts}" /p:WAR="${War}" /p:Configuration=Release /p:DisplayVersion=$JenkinsVersion /p:ProductName="${ProductName}" /p:ProductSummary="${ProductSummary}" /p:ProductVendor="${ProductVendor}" /p:ArtifactName="${ArtifactName}" /p:BannerBmp="${BannerBmp}" /p:DialogBmp="${DialogBmp}" /p:InstallerIco="${InstallerIco}" /t:Restore /t:Build
 
-Get-ChildItem .\bin\Release -Filter *.msi -Recurse |
+Get-ChildItem .\Setup\bin\Release -Filter *.msi -Recurse |
     Foreach-Object {
         if((-not ([System.String]::IsNullOrWhiteSpace($env:PKCS12_FILE)) -and (Test-Path $env:PKCS12_FILE)) -and (-not [System.String]::IsNullOrWhiteSpace($env:SIGN_STOREPASS))) {
             Write-Host "Signing installer: $($_.FullName)"
@@ -101,12 +99,12 @@ Get-ChildItem .\bin\Release -Filter *.msi -Recurse |
                     Start-Sleep -Seconds 15
                 }
             }
-            
+
             if($i -le 0) {
                 Write-Error "signtool did not complete successfully after $retries tries"
                 exit -1
             }
-            
+
             if($UseTracing) { Set-PSDebug -Trace 1 }
 
             Write-Host "Checking the signature"
